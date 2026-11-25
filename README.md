@@ -308,6 +308,20 @@ nothing else. It runs as an unprivileged user, keeps the SQLite file in
 `/data`, and has no CA certificates: to verify the TLS certificate of a
 database, mount a CA bundle and point `SSL_CERT_FILE` at it.
 
+```bash
+docker build -t tapirpost .
+export TOKEN=$(head -c 32 /dev/urandom | base64)
+docker run -p 8080:8080 -e TAPIRPOST_ADMIN_TOKEN="$TOKEN" tapirpost
+```
+
+[`deploy/smoke.sh`](deploy/smoke.sh) checks a running TapirPost from the
+outside, wherever it runs: it creates a content type, publishes an entry,
+reads it the way a website would and removes the type again.
+
+```bash
+deploy/smoke.sh http://localhost:8080 "$TOKEN"
+```
+
 [`deploy/kubernetes/tapirpost.yaml`](deploy/kubernetes/tapirpost.yaml) is a
 Deployment with two replicas on PostgreSQL and a Service. What the server
 brings for that:
@@ -362,7 +376,7 @@ same way.
 | Memory cache | The same, including the tests that publish and unpublish while readers keep the cache warm. |
 | Redis-protocol cache | Tested against a Redis-protocol server that runs inside the test process, and in CI against Valkey 9. |
 | PostgreSQL backend | The same suite as SQLite runs against PostgreSQL 18 in CI, with the race detector. Not benchmarked yet. |
-| Dockerfile, Kubernetes manifest | Written, not built or applied yet. |
+| Dockerfile, Kubernetes manifest | CI builds the image and runs it on SQLite, then applies the manifest to a kind cluster with PostgreSQL: both replicas become ready, answer through the Service and come back after a rolling restart. Not run on a real cluster yet. |
 
 Not there yet:
 
