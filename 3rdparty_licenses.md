@@ -29,6 +29,8 @@ and the rest is used by CI or to build the container image.
 | https://github.com/postgres/postgres | PostgreSQL (container image `postgres`, a service in CI) | PostgreSQL | https://www.postgresql.org/about/licence/ |
 | https://github.com/valkey-io/valkey | Valkey (container image `valkey/valkey`, a service in CI) | BSD-3-Clause | https://github.com/valkey-io/valkey/blob/unstable/COPYING |
 | https://github.com/docker-library/golang | Go container image `golang` (build stage of the Dockerfile) | BSD-3-Clause | https://github.com/docker-library/golang/blob/master/LICENSE |
+| https://github.com/kubernetes-sigs/kind | kind (CI only: the throwaway cluster the manifest is applied to; comes with the runner) | Apache-2.0 | https://github.com/kubernetes-sigs/kind/blob/main/LICENSE |
+| https://github.com/kubernetes/kubernetes | Kubernetes (CI only: `kubectl` and the node image kind runs) | Apache-2.0 | https://github.com/kubernetes/kubernetes/blob/master/LICENSE |
 
 The table lists every module in `go.mod`. The module graph behind them holds
 more modules that are needed neither to build nor to test this repository

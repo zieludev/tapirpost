@@ -86,3 +86,72 @@ jobs:
 
       - name: Benchmarks still run
         run: go test -run '^$' -bench . -benchtime 1x ./internal/httpapi
+
+  # The Dockerfile and the Kubernetes manifest, for real: the image is built
+  # and run on SQLite, then the manifest is applied to a throwaway cluster
+  # with a PostgreSQL next to it. kind and kubectl come with the runner.
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # Without the build record that Docker can attach to an image: the
+      # cluster below only needs the image itself.
+      - name: Build the image
+        run: docker build --provenance=false --build-arg VERSION=ci -t tapirpost:ci .
+
+      - name: Run the image on SQLite
+        run: |
+          token=$(head -c 32 /dev/urandom | base64)
+          docker run -d --name tapirpost -p 127.0.0.1:8080:8080 -e TAPIRPOST_ADMIN_TOKEN="$token" tapirpost:ci
+          timeout 30 sh -c 'until curl -fsS localhost:8080/readyz >/dev/null 2>&1; do sleep 1; done'
+          deploy/smoke.sh http://localhost:8080 "$token"
+          docker stop tapirpost
+          test "$(docker inspect -f '{{.State.ExitCode}}' tapirpost)" = 0
+
+      - name: Apply the manifest to a kind cluster with PostgreSQL
+        run: |
+          kind create cluster --wait 120s
+          kind load docker-image tapirpost:ci
+
+          kubectl run postgres --image=postgres:18-alpine --port=5432 \
+            --env=POSTGRES_USER=tapirpost --env=POSTGRES_PASSWORD=tapirpost --env=POSTGRES_DB=tapirpost
+          kubectl expose pod postgres --port=5432
+          kubectl wait --for=condition=Ready pod/postgres --timeout=180s
+          # Over TCP, because the image answers on its socket while it is still setting up.
+          timeout 120 sh -c 'until kubectl exec postgres -- pg_isready -h 127.0.0.1 -U tapirpost -d tapirpost >/dev/null 2>&1; do sleep 2; done'
+
+          token=$(head -c 32 /dev/urandom | base64)
+          kubectl create secret generic tapirpost \
+            --from-literal=database-url='postgres://tapirpost:tapirpost@postgres:5432/tapirpost' \
+            --from-literal=admin-token="$token"
+          sed 's|registry.example.com/tapirpost:0.1.0|tapirpost:ci|' deploy/kubernetes/tapirpost.yaml > applied.yaml
+          grep -q 'image: tapirpost:ci' applied.yaml
+          kubectl apply -f applied.yaml
+          kubectl rollout status deployment/tapirpost --timeout=180s
+
+          kubectl port-forward service/tapirpost 8081:80 >/dev/null &
+          timeout 30 sh -c 'until curl -fsS localhost:8081/readyz >/dev/null 2>&1; do sleep 1; done'
+          deploy/smoke.sh http://localhost:8081 "$token"
+
+          # A rolling restart: new pods migrate a database that is already
+          # up to date, old ones leave without dropping the Service.
+          kubectl rollout restart deployment/tapirpost
+          kubectl rollout status deployment/tapirpost --timeout=180s
+          timeout 90 sh -c 'until [ "$(kubectl get pods -l app.kubernetes.io/name=tapirpost --no-headers | wc -l)" = 2 ]; do sleep 1; done'
+          kubectl port-forward service/tapirpost 8082:80 >/dev/null &
+          timeout 30 sh -c 'until curl -fsS localhost:8082/readyz >/dev/null 2>&1; do sleep 1; done'
+          deploy/smoke.sh http://localhost:8082 "$token"
+
+          restarts=$(kubectl get pods -l app.kubernetes.io/name=tapirpost -o jsonpath='{.items[*].status.containerStatuses[*].restartCount}')
+          echo "container restarts: $restarts"
+          test -z "$(echo "$restarts" | tr -d ' 0')"
+
+      - name: What the containers logged, when something failed
+        if: failure()
+        run: |
+          docker logs tapirpost || true
+          kubectl get pods -o wide || true
+          kubectl describe pods -l app.kubernetes.io/name=tapirpost || true
+          kubectl logs -l app.kubernetes.io/name=tapirpost --all-containers --prefix --tail=100 || true
+          kubectl logs postgres --tail=50 || true
