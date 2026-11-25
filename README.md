@@ -360,8 +360,8 @@ same way.
 | --- | --- |
 | SQLite backend | The whole test suite runs against it, with the race detector. |
 | Memory cache | The same, including the tests that publish and unpublish while readers keep the cache warm. |
-| Redis-protocol cache | Tested against a Redis-protocol server that runs inside the test process. The suite for a real Redis or Valkey is written and wired into CI; I have not run it against a real server myself. |
-| PostgreSQL backend | Written against the same suite and wired into CI with PostgreSQL 18. I have not run it against a real PostgreSQL myself yet, so treat it as untested until CI is green. |
+| Redis-protocol cache | Tested against a Redis-protocol server that runs inside the test process, and in CI against Valkey 9. |
+| PostgreSQL backend | The same suite as SQLite runs against PostgreSQL 18 in CI, with the race detector. Not benchmarked yet. |
 | Dockerfile, Kubernetes manifest | Written, not built or applied yet. |
 
 Not there yet:
