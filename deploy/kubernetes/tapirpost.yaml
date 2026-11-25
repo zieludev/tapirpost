@@ -1,0 +1,104 @@
+# TapirPost on Kubernetes with PostgreSQL: two replicas behind one Service.
+#
+# Before applying this:
+#
+#   1. Build the image from the Dockerfile, push it to your registry and put
+#      its name where it says "image:" below.
+#   2. Create the Secret the Deployment reads. The admin token must be at
+#      least 32 characters long:
+#
+#        kubectl create secret generic tapirpost \
+#          --from-literal=database-url='postgres://user:password@postgres:5432/tapirpost' \
+#          --from-literal=admin-token="$(head -c 32 /dev/urandom | base64)"
+#
+# Every replica migrates the database when it starts. A lock in PostgreSQL
+# makes sure that only one of them does it at a time.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tapirpost
+  labels:
+    app.kubernetes.io/name: tapirpost
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tapirpost
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tapirpost
+    spec:
+      # Longer than the shutdown delay and the shutdown timeout together, so
+      # that Kubernetes does not kill a pod that is still finishing requests.
+      terminationGracePeriodSeconds: 40
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: tapirpost
+          image: registry.example.com/tapirpost:0.1.0
+          args: ["serve"]
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: TAPIRPOST_DB
+              valueFrom:
+                secretKeyRef:
+                  name: tapirpost
+                  key: database-url
+            - name: TAPIRPOST_ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: tapirpost
+                  key: admin-token
+            # The memory cache is safe with several replicas: every request
+            # checks the revision of the content in the database first. Use
+            # a redis:// URL here to share one cache between the replicas.
+            - name: TAPIRPOST_CACHE
+              value: memory
+            - name: TAPIRPOST_LOG_FORMAT
+              value: json
+            # After SIGTERM the pod reports "not ready" and keeps serving for
+            # this long, which gives the Service time to stop sending to it.
+            - name: TAPIRPOST_SHUTDOWN_DELAY
+              value: 5s
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tapirpost
+  labels:
+    app.kubernetes.io/name: tapirpost
+spec:
+  selector:
+    app.kubernetes.io/name: tapirpost
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

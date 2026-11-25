@@ -1,0 +1,11 @@
+# The binary, when built in the checkout.
+/tapirpost
+
+# SQLite databases and what SQLite keeps next to them.
+*.db
+*.db-shm
+*.db-wal
+
+# Local settings never belong in the repository.
+.env
+.env.*

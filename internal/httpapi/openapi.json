@@ -1,0 +1,1467 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "TapirPost",
+    "version": "0.1.0",
+    "summary": "A small headless CMS.",
+    "description": "Content types are defined by a schema, entries have a draft and a published copy, and tokens with scopes guard the API. The delivery API under /v1/content serves published content only. Everything else is the management API.",
+    "license": {
+      "name": "MIT",
+      "identifier": "MIT"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080"
+    }
+  ],
+  "tags": [
+    {
+      "name": "delivery",
+      "description": "Published content. Needs the read scope, or no token at all when the server runs with public delivery."
+    },
+    {
+      "name": "types",
+      "description": "Content types. Reading needs any token, changing needs the admin scope."
+    },
+    {
+      "name": "entries",
+      "description": "Drafts and publishing. Needs the write scope."
+    },
+    {
+      "name": "tokens",
+      "description": "API tokens. Needs the admin scope."
+    },
+    {
+      "name": "operations",
+      "description": "Probes and this document. No token needed."
+    }
+  ],
+  "security": [
+    {
+      "bearer": []
+    }
+  ],
+  "paths": {
+    "/healthz": {
+      "get": {
+        "tags": ["operations"],
+        "operationId": "liveness",
+        "summary": "Liveness probe",
+        "description": "Answers as long as the process serves HTTP.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "The process is up.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/readyz": {
+      "get": {
+        "tags": ["operations"],
+        "operationId": "readiness",
+        "summary": "Readiness probe",
+        "description": "Checks that the database answers. Fails while the server is shutting down, so that a load balancer stops sending requests first.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Ready for requests.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The database does not answer, or the server is shutting down.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/openapi.json": {
+      "get": {
+        "tags": ["operations"],
+        "operationId": "openapi",
+        "summary": "This document",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "The OpenAPI description of the API.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/content/{type}": {
+      "get": {
+        "tags": ["delivery"],
+        "operationId": "listPublished",
+        "summary": "List published entries",
+        "description": "Filters, sorts and pages the published copies of a type. Without a sort the newest entries come first. Only fields of the type, id, created_at and published_at can be filtered or sorted on. Unknown query parameters are refused.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/TypeName"
+          },
+          {
+            "$ref": "#/components/parameters/Filter"
+          },
+          {
+            "$ref": "#/components/parameters/Sort"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/Offset"
+          },
+          {
+            "$ref": "#/components/parameters/IfNoneMatch"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of published entries.",
+            "headers": {
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "X-Cache": {
+                "$ref": "#/components/headers/XCache"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublishedPage"
+                }
+              }
+            }
+          },
+          "304": {
+            "$ref": "#/components/responses/NotModified"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/v1/content/{type}/{id}": {
+      "get": {
+        "tags": ["delivery"],
+        "operationId": "getPublished",
+        "summary": "Get a published entry",
+        "description": "Returns the published copy of an entry. An entry that exists but is not published is not found.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/TypeName"
+          },
+          {
+            "$ref": "#/components/parameters/EntryID"
+          },
+          {
+            "$ref": "#/components/parameters/IfNoneMatch"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The published entry.",
+            "headers": {
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "X-Cache": {
+                "$ref": "#/components/headers/XCache"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublishedEntry"
+                }
+              }
+            }
+          },
+          "304": {
+            "$ref": "#/components/responses/NotModified"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/v1/types": {
+      "get": {
+        "tags": ["types"],
+        "operationId": "listTypes",
+        "summary": "List content types",
+        "description": "A token that is limited to some content types sees only those.",
+        "responses": {
+          "200": {
+            "description": "The content types, ordered by name.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TypeList"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      },
+      "post": {
+        "tags": ["types"],
+        "operationId": "createType",
+        "summary": "Create a content type",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TypeSpec"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The content type was created.",
+            "headers": {
+              "Location": {
+                "$ref": "#/components/headers/Location"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Type"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          }
+        }
+      }
+    },
+    "/v1/types/{type}": {
+      "get": {
+        "tags": ["types"],
+        "operationId": "getType",
+        "summary": "Get a content type",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/TypeName"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The content type.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Type"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "put": {
+        "tags": ["types"],
+        "operationId": "updateType",
+        "summary": "Replace the description and fields of a content type",
+        "description": "Fields can be added, removed and given other constraints. Removing a field deletes its values from every entry of the type, drafts and published copies alike. The type of an existing field cannot change: remove the field and add it again.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/TypeName"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TypeSpec"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The content type after the change.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Type"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          }
+        }
+      },
+      "delete": {
+        "tags": ["types"],
+        "operationId": "deleteType",
+        "summary": "Delete a content type and all of its entries",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/TypeName"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The content type and its entries are gone."
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/v1/types/{type}/entries": {
+      "get": {
+        "tags": ["entries"],
+        "operationId": "listEntries",
+        "summary": "List entries with their drafts",
+        "description": "Filters, sorts and pages on the draft copies. Besides the fields of the type, id, created_at, updated_at and published_at can be used.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/TypeName"
+          },
+          {
+            "$ref": "#/components/parameters/Filter"
+          },
+          {
+            "$ref": "#/components/parameters/Sort"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/Offset"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of entries.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntryPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "post": {
+        "tags": ["entries"],
+        "operationId": "createEntry",
+        "summary": "Create a draft",
+        "description": "A draft may leave required fields out. The values it does have must fit the type.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/TypeName"
+          }
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/Entry"
+        },
+        "responses": {
+          "201": {
+            "description": "The draft was created.",
+            "headers": {
+              "Location": {
+                "$ref": "#/components/headers/Location"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Entry"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          }
+        }
+      }
+    },
+    "/v1/types/{type}/entries/{id}": {
+      "get": {
+        "tags": ["entries"],
+        "operationId": "getEntry",
+        "summary": "Get an entry with its draft and its published copy",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/TypeName"
+          },
+          {
+            "$ref": "#/components/parameters/EntryID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The entry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Entry"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "put": {
+        "tags": ["entries"],
+        "operationId": "updateEntry",
+        "summary": "Replace the draft of an entry",
+        "description": "The published copy stays as it is until the entry is published again.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/TypeName"
+          },
+          {
+            "$ref": "#/components/parameters/EntryID"
+          }
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/Entry"
+        },
+        "responses": {
+          "200": {
+            "description": "The entry with its new draft.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Entry"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          }
+        }
+      },
+      "delete": {
+        "tags": ["entries"],
+        "operationId": "deleteEntry",
+        "summary": "Delete an entry, published or not",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/TypeName"
+          },
+          {
+            "$ref": "#/components/parameters/EntryID"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The entry is gone."
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/v1/types/{type}/entries/{id}/publish": {
+      "post": {
+        "tags": ["entries"],
+        "operationId": "publishEntry",
+        "summary": "Publish the current draft",
+        "description": "Copies the draft to the published copy. Unlike a draft, what is published must satisfy every rule of the type, required fields included.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/TypeName"
+          },
+          {
+            "$ref": "#/components/parameters/EntryID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The entry, now published.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Entry"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          }
+        }
+      }
+    },
+    "/v1/types/{type}/entries/{id}/unpublish": {
+      "post": {
+        "tags": ["entries"],
+        "operationId": "unpublishEntry",
+        "summary": "Withdraw the published copy",
+        "description": "The draft is kept. Unpublishing an entry that is not published changes nothing.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/TypeName"
+          },
+          {
+            "$ref": "#/components/parameters/EntryID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The entry, no longer published.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Entry"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/v1/tokens": {
+      "get": {
+        "tags": ["tokens"],
+        "operationId": "listTokens",
+        "summary": "List tokens",
+        "description": "Secrets are not stored and therefore not listed. The prefix helps to tell tokens apart.",
+        "responses": {
+          "200": {
+            "description": "The tokens, oldest first.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenList"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "post": {
+        "tags": ["tokens"],
+        "operationId": "createToken",
+        "summary": "Create a token",
+        "description": "The secret is in the response and nowhere else: only its hash is stored.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenSpec"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The token, with its secret.",
+            "headers": {
+              "Location": {
+                "$ref": "#/components/headers/Location"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedToken"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          }
+        }
+      }
+    },
+    "/v1/tokens/{id}": {
+      "delete": {
+        "tags": ["tokens"],
+        "operationId": "deleteToken",
+        "summary": "Revoke a token",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/TokenID"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The token no longer works."
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "A token created through POST /v1/tokens or with the command tapirpost token create, or the admin token from the configuration."
+      }
+    },
+    "parameters": {
+      "TypeName": {
+        "name": "type",
+        "in": "path",
+        "required": true,
+        "description": "The name of a content type.",
+        "schema": {
+          "$ref": "#/components/schemas/Name"
+        }
+      },
+      "EntryID": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "The id of an entry.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "TokenID": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "The id of a token.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "Filter": {
+        "name": "filter",
+        "in": "query",
+        "style": "deepObject",
+        "explode": true,
+        "description": "Written as filter[field]=value for equality, or filter[field][operator]=value with one of eq, ne, lt, lte, gt, gte, in, contains. Several filters must all hold. in takes values separated by commas. ne also keeps entries that have no value for the field. Strings compare byte by byte and case sensitively. Boolean fields support eq and ne only, json fields cannot be filtered.",
+        "schema": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "example": {
+          "status": "live",
+          "views": {
+            "gte": "10"
+          }
+        }
+      },
+      "Sort": {
+        "name": "sort",
+        "in": "query",
+        "description": "Up to three fields separated by commas. A leading minus sorts descending. Entries without a value come last either way.",
+        "schema": {
+          "type": "string"
+        },
+        "example": "-published_at,title"
+      },
+      "Limit": {
+        "name": "limit",
+        "in": "query",
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 20
+        }
+      },
+      "Offset": {
+        "name": "offset",
+        "in": "query",
+        "schema": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0
+        }
+      },
+      "IfNoneMatch": {
+        "name": "If-None-Match",
+        "in": "header",
+        "description": "The ETag of a response the client already has. If the content is still the same the answer is 304 without a body.",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    "headers": {
+      "ETag": {
+        "description": "A validator for the response body.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "CacheControl": {
+        "description": "The server's delivery cache control setting, no-cache unless configured otherwise: clients may keep the response but have to revalidate it.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "XCache": {
+        "description": "HIT or MISS when the server runs with a cache. Absent when caching is off.",
+        "schema": {
+          "type": "string",
+          "enum": ["HIT", "MISS"]
+        }
+      },
+      "Location": {
+        "description": "The path of the created resource.",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    "requestBodies": {
+      "Entry": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/EntryInput"
+            }
+          }
+        }
+      }
+    },
+    "responses": {
+      "NotModified": {
+        "description": "The content still matches If-None-Match. No body."
+      },
+      "BadRequest": {
+        "description": "The request could not be understood: malformed JSON, an unknown property, or invalid query parameters.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "The token is missing, unknown or expired.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "The token lacks the scope, or is limited to other content types.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "There is no such content type, entry or token.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Conflict": {
+        "description": "The name is taken, or someone else changed the same thing at the same time. Read it again and retry.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "PayloadTooLarge": {
+        "description": "The body is larger than the server accepts.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "UnsupportedMediaType": {
+        "description": "The body was not sent as application/json.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "ValidationFailed": {
+        "description": "The body was understood but breaks a rule. The details name the fields.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Name": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]{0,62}$"
+      },
+      "Timestamp": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "Health": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": ["code", "message"],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "bad_request",
+                  "unauthorized",
+                  "forbidden",
+                  "not_found",
+                  "method_not_allowed",
+                  "conflict",
+                  "payload_too_large",
+                  "unsupported_media_type",
+                  "validation_failed",
+                  "internal",
+                  "timeout",
+                  "cancelled"
+                ]
+              },
+              "message": {
+                "type": "string"
+              },
+              "details": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["message"],
+                  "properties": {
+                    "field": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "Field": {
+        "type": "object",
+        "required": ["name", "type"],
+        "properties": {
+          "name": {
+            "$ref": "#/components/schemas/Name",
+            "description": "id, created_at, updated_at and published_at are reserved."
+          },
+          "type": {
+            "type": "string",
+            "enum": ["string", "text", "integer", "number", "boolean", "datetime", "enum", "json"],
+            "description": "string is one line of text, text is text of any shape, integer is a 64-bit integer, number a 64-bit float, datetime an RFC 3339 timestamp that is stored in UTC, enum one of values, json any JSON value."
+          },
+          "required": {
+            "type": "boolean",
+            "description": "Checked when an entry is published, not while it is a draft."
+          },
+          "min_length": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "For string and text, in characters."
+          },
+          "max_length": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "For string and text, in characters."
+          },
+          "pattern": {
+            "type": "string",
+            "description": "For string and text: a regular expression in RE2 syntax that the value has to match."
+          },
+          "min": {
+            "type": "number",
+            "description": "For integer and number."
+          },
+          "max": {
+            "type": "number",
+            "description": "For integer and number."
+          },
+          "values": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "For enum: the allowed values."
+          }
+        }
+      },
+      "TypeSpec": {
+        "type": "object",
+        "required": ["fields"],
+        "properties": {
+          "name": {
+            "$ref": "#/components/schemas/Name",
+            "description": "Required when creating. When updating it may be left out, and must equal the name in the path otherwise."
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 1000
+          },
+          "fields": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/Field"
+            }
+          }
+        }
+      },
+      "Type": {
+        "type": "object",
+        "required": ["name", "description", "fields", "schema_version", "revision", "created_at", "updated_at"],
+        "properties": {
+          "name": {
+            "$ref": "#/components/schemas/Name"
+          },
+          "description": {
+            "type": "string"
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Field"
+            }
+          },
+          "schema_version": {
+            "type": "integer",
+            "description": "Goes up when the fields change."
+          },
+          "revision": {
+            "type": "integer",
+            "description": "Goes up whenever the published content of the type may have changed."
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "updated_at": {
+            "$ref": "#/components/schemas/Timestamp"
+          }
+        }
+      },
+      "TypeList": {
+        "type": "object",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Type"
+            }
+          }
+        }
+      },
+      "Fields": {
+        "type": "object",
+        "additionalProperties": true,
+        "description": "The values of an entry, by field name. Fields without a value are left out."
+      },
+      "EntryInput": {
+        "type": "object",
+        "required": ["fields"],
+        "properties": {
+          "fields": {
+            "$ref": "#/components/schemas/Fields"
+          }
+        }
+      },
+      "Entry": {
+        "type": "object",
+        "required": ["id", "type", "status", "version", "created_at", "updated_at", "published_at", "fields", "published_fields"],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/Name"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["draft", "published", "changed"],
+            "description": "draft: not published. published: the published copy equals the draft. changed: published, with newer edits in the draft."
+          },
+          "version": {
+            "type": "integer",
+            "description": "Goes up with every change of the draft."
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "updated_at": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "published_at": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fields": {
+            "$ref": "#/components/schemas/Fields"
+          },
+          "published_fields": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Fields"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "EntryPage": {
+        "type": "object",
+        "required": ["items", "total", "limit", "offset"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Entry"
+            }
+          },
+          "total": {
+            "type": "integer"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          }
+        }
+      },
+      "PublishedEntry": {
+        "type": "object",
+        "required": ["id", "type", "published_at", "fields"],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/Name"
+          },
+          "published_at": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "fields": {
+            "$ref": "#/components/schemas/Fields"
+          }
+        }
+      },
+      "PublishedPage": {
+        "type": "object",
+        "required": ["items", "total", "limit", "offset"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublishedEntry"
+            }
+          },
+          "total": {
+            "type": "integer"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          }
+        }
+      },
+      "Scope": {
+        "type": "string",
+        "enum": ["read", "write", "admin"],
+        "description": "read: published content. write: entries, and everything read allows. admin: everything."
+      },
+      "TokenSpec": {
+        "type": "object",
+        "required": ["name", "scopes"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "scopes": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/Scope"
+            }
+          },
+          "types": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Name"
+            },
+            "description": "Limits the token to these content types. Empty or absent means all of them. Not allowed together with the admin scope."
+          },
+          "expires_at": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "Token": {
+        "type": "object",
+        "required": ["id", "name", "prefix", "scopes", "types", "created_at", "expires_at"],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "prefix": {
+            "type": "string",
+            "description": "The first characters of the secret."
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Scope"
+            }
+          },
+          "types": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Name"
+            }
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "expires_at": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "CreatedToken": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Token"
+          },
+          {
+            "type": "object",
+            "required": ["secret"],
+            "properties": {
+              "secret": {
+                "type": "string",
+                "description": "Send it as Authorization: Bearer <secret>. It is shown this once."
+              }
+            }
+          }
+        ]
+      },
+      "TokenList": {
+        "type": "object",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Token"
+            }
+          }
+        }
+      }
+    }
+  }
+}

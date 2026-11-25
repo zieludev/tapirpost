@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.27"
+
+      - name: Formatting
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Staticcheck
+        run: go run honnef.co/go/tools/cmd/staticcheck@v0.8.2 ./...
+
+      - name: Hyphens only, no en or em dashes
+        run: |
+          if grep -rnP '[\x{2013}\x{2014}]' --exclude-dir=.git .; then
+            exit 1
+          fi
+
+      - name: Build a static binary
+        run: CGO_ENABLED=0 go build -trimpath -o tapirpost ./cmd/tapirpost
+
+  # The same suites run against SQLite, which needs nothing, and against the
+  # services below. Without the three variables the tests that need a service
+  # would be skipped; with TAPIRPOST_TEST_REQUIRE_SERVICES a missing service
+  # fails the run instead.
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: tapirpost
+          POSTGRES_PASSWORD: tapirpost
+          POSTGRES_DB: tapirpost_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tapirpost -d tapirpost_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+      valkey:
+        image: valkey/valkey:9-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      TAPIRPOST_TEST_POSTGRES_URL: postgres://tapirpost:tapirpost@127.0.0.1:5432/tapirpost_test?sslmode=disable
+      TAPIRPOST_TEST_REDIS_URL: redis://127.0.0.1:6379/0
+      TAPIRPOST_TEST_REQUIRE_SERVICES: "1"
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.27"
+
+      - name: Tests
+        run: go test -race ./...
+
+      - name: Benchmarks still run
+        run: go test -run '^$' -bench . -benchtime 1x ./internal/httpapi
